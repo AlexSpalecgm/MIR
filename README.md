@@ -71,4 +71,38 @@ sudo chmod +x /usr/bin/docker-compose
 
 docker-compose --version
 
+Этот код скачивает содержимое репозитория skl256/grafana_stack_for_docker:
 
+sudo git clone https://github.com/skl256/grafana_stack_for_docker.git
+
+Переходим в скаченный репозиторий
+
+cd grafana_stack_for_docker
+
+Создаем каталог (подкаталог):
+
+sudo mkdir -p /mnt/common_volume/swarm/grafana/config
+
+Создаем каталоги, используя перечисление имен:
+
+sudo mkdir -p /mnt/common_volume/grafana/{grafana-config,grafana-data,prometheus-data,loki-data,promtail-data} 
+
+Изменяем принадлежность  \ владельца \ доступ к файлам:
+
+sudo chown -R $(id -u):$(id -g) {/mnt/common_volume/swarm/grafana/config,/mnt/common_volume/grafana}
+
+Создаем файл:
+
+sudo touch /mnt/common_volume/grafana/grafana-config/grafana.ini
+
+Копируем все файлы из папки в необходимую директорию:
+
+sudo cp config/* /mnt/common_volume/swarm/grafana/config/
+
+Используя команду перемещения, переименовываем файл:
+
+sudo mv grafana.yaml docker-compose.yaml
+
+Поднимаем докер компос (из папки с конфигом docker-compose.yaml)
+
+sudo docker compose up -d
