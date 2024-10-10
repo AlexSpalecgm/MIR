@@ -35,3 +35,13 @@ You can set your display settings and go to Local Resources to modify sound and 
 
 ![image](https://github.com/user-attachments/assets/7a9213e6-22d0-458e-9fd6-c023760f553f)
 
+================================================
+
+Установка docker (docker-compose)
+
+wget -P /etc/yum.repos.d/ https://download.docker.com/linux/centos/docker-ce.repo
+
+dnf install docker-ce docker-ce-cli
+
+
+
