@@ -11,6 +11,8 @@ sudo dnf install git-all
 sudo git clone https://github.com/EtienneBarbier/Hyper-V-RHEL-VM.git
 (Требуется перенести в свой репозиторий)
 
+https://github.com/AlexSpalecgm/MIR/blob/main/install_configure_esm_rhel.sh
+
 cd Hyper-V-RHEL-VM
 
 sudo chmod +x install_configure_esm_rhel.sh
