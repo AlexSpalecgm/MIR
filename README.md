@@ -39,9 +39,36 @@ You can set your display settings and go to Local Resources to modify sound and 
 
 Установка docker (docker-compose)
 
+Скачиваем конфигурационный файл для репозитория докер:
+
 wget -P /etc/yum.repos.d/ https://download.docker.com/linux/centos/docker-ce.repo
 
-dnf install docker-ce docker-ce-cli
+Теперь устанавливаем docker:
 
+sudo dnf install docker-ce docker-ce-cli
+
+И разрешаем автозапуск сервиса и стартуем его:
+
+sudo systemctl enable docker --now
+
+Устанавливаем CURL:
+
+sudo yum install curl
+
+Задаем переменную с последней версией docker-compose скрипта:
+
+COMVER=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+
+Теперь скачиваем скрипт docker-compose и помещаем его в каталог /usr/bin:
+
+sudo curl -L "https://github.com/docker/compose/releases/download/$COMVER/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose
+
+Даем права файлу на исполнение:
+
+sudo chmod +x /usr/bin/docker-compose
+
+Запускаем docker-compose с выводом его версии:
+
+docker-compose --version
 
 
