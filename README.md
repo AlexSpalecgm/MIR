@@ -1,5 +1,9 @@
 # MIR
 
+![image](https://github.com/user-attachments/assets/493d6169-81da-45f4-8d47-fa30beaa9df6)
+
+
+
 Команды для установки системы мониторинга МИР. ИСП.
 
 
