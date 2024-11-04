@@ -1,0 +1,219 @@
+# Текущая дата и время в секундах с начала эпохи
+
+current_time_sec=$(date +%s)
+
+
+
+# Указываем URL для отправки данных
+
+url="localhost:8428/api/v1/import/prometheus:8428/api/v1/import"
+
+
+
+# Формируем маску для поиска файлов
+
+mask="2[4-6][0-1][0-9][0-2][0-9][0-5][0-9]*.txt"
+
+
+
+# Находим файлы по маске
+
+files=$(ls $mask 2>/dev/null)
+
+
+
+# Проверяем, найдены ли файлы
+
+if [ -z "$files" ]; then
+
+    echo "Файлы не найдены!"
+
+    exit 1
+
+fi
+
+
+
+# Создаем папки, если они не существуют
+
+mkdir -p old unknown
+
+
+
+# Перебираем найденные файлы и проверяем их срок годности
+
+for file in $files; do
+
+    # Извлекаем дату и время из имени файла
+
+    file_date="${file:0:6}"  # ГГММДД
+
+    file_time="${file:6:4}"  # ЧЧММ
+
+
+
+    # Преобразуем дату в формат YYYY-MM-DD
+
+    year="20${file_date:0:2}"
+
+    month="${file_date:2:2}"
+
+    day="${file_date:4:2}"
+
+
+
+    hour="${file_time:0:2}"
+
+    minute="${file_time:2:2}"
+
+
+
+    # Проверяем валидность времени (часы < 24 и минуты < 60)
+
+    if (( 10#$hour >= 24 || 10#$minute >= 60 )); then
+
+        echo "Неверное время для файла $file. Перемещаем в папку unknown."
+
+        mv "$file" unknown/
+
+        continue
+
+    fi
+
+
+
+    # Преобразуем дату и время в секунды с начала эпохи
+
+    file_time_sec=$(date -d "${year}-${month}-${day} ${hour}:${minute}" +%s 2>/dev/null)
+
+    if [[ $? -ne 0 ]]; then
+
+        echo "Ошибка преобразования даты для файла $file. Перемещаем в папку unknown."
+
+        mv "$file" unknown/
+
+        continue
+
+    fi
+
+
+
+    # Сравниваем разницу времени, чтобы знать, не старше ли файл 5 минут
+
+    if (( current_time_sec - file_time_sec > 300 )); then
+
+        mv "$file" old/
+
+        echo "Файл $file перемещен в папку old: файл старше 5 минут."
+
+        continue
+
+    fi
+
+
+
+    # Обработка файлов с "VO" в имени
+
+    if [[ "$file" == *VO* ]]; then
+
+        operations_sum=$(awk 'NR > 1 {sum += $3} END {print sum}' FS='\t' "$file")
+
+        operations_fail_sum=$(awk 'NR > 1 {sum += $4} END {print sum}' FS='\t' "$file")
+
+
+
+        # Отправляем данные
+
+        response_operations=$(curl -w "%{http_code}" -o /dev/null -X POST -d "Operations $operations_sum" "$url")
+
+        response_operations_fail=$(curl -w "%{http_code}" -o /dev/null -X POST -d "Operations_fail $operations_fail_sum" "$url")
+
+
+
+        # Проверяем статус отправки
+
+        if [[ $response_operations -eq 200 || $response_operations -eq 204 ]]; then
+
+            echo "Данные из файла $file (Operations) успешно отправлены."
+
+        else
+
+            echo "Ошибка при отправке данных из файла $file (Operations). Код ответа: $response_operations"
+
+        fi
+
+
+
+        if [[ $response_operations_fail -eq 200 || $response_operations_fail -eq 204 ]]; then
+
+            echo "Данные из файла $file (Operations_fail) успешно отправлены."
+
+        else
+
+            echo "Ошибка при отправке данных из файла $file (Operations_fail). Код ответа: $response_operations_fail"
+
+        fi
+
+
+
+    # Обработка файлов с "LV" в имени
+
+    elif [[ "$file" == *LV* ]]; then
+
+        # Получаем значения из столбцов, пропуская первую строку
+
+        while IFS=$'\t' read -r col1 col2 col3; do
+
+            # Заменяем пробелы на подчеркивание в первом столбце
+
+            formatted_col1=$(echo "$col1" | tr ' ' '_')
+
+            
+
+            # Формируем данные для отправки
+
+            data_value="${formatted_col1},value=${col2}"
+
+            data_value_offline="${formatted_col1}_offline,value=${col3}"
+
+
+
+            # Отправляем данные
+
+            response_value=$(curl -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
+
+            response_value_offline=$(curl -w "%{http_code}" -o /dev/null -X POST -d "$data_value_offline" "$url")
+
+
+
+            # Проверяем статус отправки для значения
+
+            if [[ $response_value -eq 200 || $response_value -eq 204 ]]; then
+
+                echo "Данные из файла $file (metric: $formatted_col1) успешно отправлены."
+
+            else
+
+                echo "Ошибка при отправке данных из файла $file (metric: $formatted_col1). Код ответа: $response_value"
+
+            fi
+
+
+
+            # Проверяем статус отправки для offline значения
+
+            if [[ $response_value_offline -eq 200 || $response_value_offline -eq 204 ]]; then
+
+                echo "Данные из файла $file (metric: ${formatted_col1}_offline) успешно отправлены."
+
+            else
+
+                echo "Ошибка при отправке данных из файла $file (metric: ${formatted_col1}_offline). Код ответа: $response_value_offline"
+
+            fi
+
+        done < <(tail -n +2 "$file")  # Пропускаем первую строку
+
+    fi
+
+done
