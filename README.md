@@ -110,3 +110,7 @@ sudo mv grafana.yaml docker-compose.yaml
 Поднимаем докер компос (из папки с конфигом docker-compose.yaml)
 
 sudo docker compose up -d
+
+
+
+![Uploading image.png…]()
