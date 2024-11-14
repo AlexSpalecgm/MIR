@@ -87,18 +87,21 @@ for file in $files; do
     # Обработка файлов с "LV" в имени
     elif [[ "$file" == *LV* ]]; then
     # Считываем первую строку для получения значений лейблов и выбора состояния
-    IFS=$'\t' read -r label1 state_col2 state_col3 < "$file"
+    IFS=$'\t' read -r col1 state_col2 state_col3 < "$file"
+
+    # Заменяем пробелы и скобки на подчеркивания в первом столбце
+    formatted_col1=$(echo "$col1" | tr -s ' ' '_' | tr -s '(' '_' | tr -s ')' '_' | sed 's/[ _]$//')
 
     while IFS=$'\t' read -r value_col; do
         # Определяем какое значение использовать для метрики в зависимости от state
         if [[ "$state" == "$state_col2" ]]; then
-            metric_value="$col2"
+            metric_value="$value_col"
         else
-            metric_value="$col3"
+            metric_value="$state_col3"
         fi
-        
+
         # Формируем данные для отправки метрики
-        data_value="LV{$label1=\"$value_col\", state=\"$state\"} $metric_value"
+        data_value="LV{${formatted_col1}=\"${value_col}\", state=\"${state}\"} $metric_value"
 
         # Отправляем метрику
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
