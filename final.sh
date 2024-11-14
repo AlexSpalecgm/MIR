@@ -85,7 +85,7 @@ for file in $files; do
         done < <(tail -n +2 "$file")  # Пропускаем первую строку
 
     # Обработка файлов с "LV" в имени
-    elif [[ "$file" == LV ]]; then
+    elif [[ "$file" == *LV* ]]; then
     # Считываем первую строку для получения значений лейблов
     IFS=$'\t' read -r header_label state_col2 state_col3 < "$file"
 
@@ -102,11 +102,12 @@ for file in $files; do
         # Отправляем метрику для state_col2
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
         if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
-            echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value"
+            echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value для state_col2"
             all_success=false
         else
-            echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value"
+            echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value для state_col2"
         fi
+        
         # Для состояния col3
         metric_value="$value_col3"
         data_value="LV{LINK_TYPE=\"${formatted_link_type}\", state=\"${state_col3}\"} $metric_value"
@@ -114,10 +115,10 @@ for file in $files; do
         # Отправляем метрику для state_col3
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
         if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
-            echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value"
+            echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value для state_col3"
             all_success=false
         else
-            echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value"
+            echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value для state_col3"
         fi
 
     done < <(tail -n +2 "$file")  # Пропускаем первую строку
