@@ -85,34 +85,41 @@ for file in $files; do
         done < <(tail -n +2 "$file")  # Пропускаем первую строку
 
     # Обработка файлов с "LV" в имени
-    elif [[ "$file" == *LV* ]]; then
-    # Считываем первую строку для получения значений лейблов и выбора состояния
-    IFS=$'\t' read -r col1 state_col2 state_col3 < "$file"
+    elif [[ "$file" == LV ]]; then
+    # Считываем первую строку для получения значений лейблов
+    IFS=$'\t' read -r header_label state_col2 state_col3 < "$file"
 
-    # Заменяем пробелы и скобки на подчеркивания в первом столбце
-    formatted_col1=$(echo "$col1" | tr -s ' ' '_' | tr -s '(' '_' | tr -s ')' '_' | sed 's/[ _]$//')
+    # Пропускаем первую строку и считываем оставшиеся строки
+    while IFS=$'\t' read -r link_type value_col2 value_col3; do
+        # Форматируем LINK_TYPE
+        formatted_link_type=$(echo "$link_type" | tr -s ' ' '_' | tr -s '(' '_' | tr -s ')' '_' | sed 's/[ _]$//')
 
-    while IFS=$'\t' read -r value_col; do
-        # Определяем какое значение использовать для метрики в зависимости от state
-        if [[ "$state" == "$state_col2" ]]; then
-            metric_value="$value_col"
-        else
-            metric_value="$state_col3"
-        fi
+        # Определяем значения метрик в зависимости от состояния
+        # Для состояния col2
+        metric_value="$value_col2"
+        data_value="LV{LINK_TYPE=\"${formatted_link_type}\", state=\"${state_col2}\"} $metric_value"
 
-        # Формируем данные для отправки метрики
-        data_value="LV{${formatted_col1}=\"${value_col}\", state=\"${state}\"} $metric_value"
-
-        # Отправляем метрику
+        # Отправляем метрику для state_col2
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
-
-        # Проверяем статус отправки для метрики
         if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
             echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value"
             all_success=false
         else
             echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value"
         fi
+        # Для состояния col3
+        metric_value="$value_col3"
+        data_value="LV{LINK_TYPE=\"${formatted_link_type}\", state=\"${state_col3}\"} $metric_value"
+
+        # Отправляем метрику для state_col3
+        response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
+        if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
+            echo "Ошибка при отправке данных из файла $file (metric: LV). Код ответа: $response_value"
+            all_success=false
+        else
+            echo "Данные из файла $file (metric: LV) успешно отправлены: $data_value"
+        fi
+
     done < <(tail -n +2 "$file")  # Пропускаем первую строку
 
     # Обработка файлов с "CV" в имени
