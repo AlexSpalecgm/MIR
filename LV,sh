@@ -141,14 +141,6 @@ for file in $files; do
     echo "$file" >> "$log_file"
   fi
 
-LINK_TYPE	ATM	ATM_OFFLINE
-INTERNET UFA	870	21
-Internet (Agent)	34	5
-Public IP	386	8
-SOVINTEL (Agent)	15	4
-INTERNET	5	0
-Local Network	37	0
-
   # Удаляем исходный файл
   rm "$file"
 done
