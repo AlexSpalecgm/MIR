@@ -85,33 +85,38 @@ for file in $files; do
         done < <(tail -n +2 "$file")
 
     # Обработка файлов с "LV" в имени
-    elif [[ "$file" == *LV* ]]; then
-    # Считываем только первую строку для заголовков
-    IFS=$'\t' read -r header_label state_col2 raw_state_col3 < "$file"
-    # Удаляем возможный символ \r из state_col3
-    state_col3=$(echo "$raw_state_col3" | tr -d '\r')
+   elif [[ "$file" == *LV* ]]; then
+    # Используем awk для извлечения header_label, state_col2 и state_col3 из первой строки
+    read header_label state_col2 state_col3 < <(awk 'NR==1 {gsub(/\r/, ""); print $1, $2, $3}' "$file")
 
-    # Обработка остальных строк файла
-    while IFS=$'\t' read -r link_type value_col2 value_col3; do
-        formatted_link_type=$(echo "$link_type" | tr -s ' ' '_' | tr -s '(' '_' | tr -s ')' '_' | sed 's/[ _]$//')
-
-        # Обработка для state_col2
-        metric_value="$value_col2"
-        data_value="LV{LINK_TYPE=\"$formatted_link_type\", state=\"$state_col2\"} $metric_value"
-        response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
-        if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
-            all_success=false
-        fi
-
-        # Обработка для state_col3 (с корректным считыванием)
-        metric_value="$value_col3"
-        data_value="LV{LINK_TYPE=\"$formatted_link_type\", state=\"$state_col3\"} $metric_value"
-        response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
-        if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
-            all_success=false
-        fi
+    # Используем awk для обработки всех остальных строк и получения значений
+    awk -v state_col2="$state_col2" -v state_col3="$state_col3" -v url="$url" '
+    BEGIN {
+        RS="\n"; FS="\t";
+    }
+    NR > 1 {
+        formatted_link_type = gensub(/ /, "_", "g", $1);
+        formatted_link_type = gensub(/\(/, "_", "g", formatted_link_type);
+        formatted_link_type = gensub(/\)/, "_", "g", formatted_link_type);
+        gsub(/[ _]$/, "", formatted_link_type);
         
-    done < <(tail -n +2 "$file")  # Используем tail для пропуска первой строки
+        # Обработка для state_col2
+        metric_value = $2;
+        data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col2 "\"} " metric_value;
+        response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
+        if (response_value != 0) {
+            all_success = false;
+        }
+
+        # Обработка для state_col3
+        metric_value = $3;
+        data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col3 "\"} " metric_value;
+        response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
+        if (response_value != 0) {
+            all_success = false;
+        }
+    }' "$file"
+fi
 
     # Обработка файлов с "CV" в имени
     elif [[ "$file" == *CV* ]]; then
