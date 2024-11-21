@@ -73,84 +73,81 @@ for file in $files; do
     all_success=true
 
     # Обработка файлов с "NV" в имени
-    if [[ "$file" == *NV* ]]; then
-        IFS=$'\t' read -r _ label2 label3 label4 label5 label6 < "$file"
+if [[ "$file" == *NV* ]]; then
+    # Ваш код для обработки NV файлов здесь
+    IFS=$'\t' read -r _ label2 label3 label4 label5 label6 < "$file"
 
-        while IFS=$'\t' read -r col1 col2 col3 col4 col5; do
-            data_value="NV{$label2=\"$col2\", $label3=\"$col3\", $label4=\"$col4\"} $col5"
-            response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
-            if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
-                all_success=false
-            fi
-        done < <(tail -n +2 "$file")
+    while IFS=$'\t' read -r col1 col2 col3 col4 col5; do
+        data_value="NV{$label2=\"$col2\", $label3=\"$col3\", $label4=\"$col4\"} $col5"
+        response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
+        if [[ $response_value -ne 200 && $response_value -ne 204 ]]; then
+            all_success=false
+        fi
+    done < <(tail -n +2 "$file")
 
-    # Обработка файлов с "LV" в имени
-   elif [[ "$file" == *LV* ]]; then
-        # Используем awk для извлечения header_label, state_col2 и state_col3 из первой строки
-        read header_label state_col2 raw_state_col3 < <(awk 'NR==1 {gsub(/\r/, ""); print $1, $2, $3}' "$file")
-        
-        # Используем awk для обработки всех остальных строк и получения значений
-        awk -v state_col2="$state_col2" -v state_col3="$raw_state_col3" -v url="$url" '
-        BEGIN {
-            RS="\n"; FS="\t";
+# Обработка файлов с "LV" в имени
+elif [[ "$file" == *LV* ]]; then
+    read header_label state_col2 raw_state_col3 < <(awk 'NR==1 {gsub(/\r/, ""); print $1, $2, $3}' "$file")
+
+    awk -v state_col2="$state_col2" -v state_col3="$raw_state_col3" -v url="$url" '
+    BEGIN {
+        RS="\n"; FS="\t";
+    }
+    NR > 1 {
+        formatted_link_type = gensub(/ /, "_", "g", $1);
+        formatted_link_type = gensub(/\(/, "_", "g", formatted_link_type);
+        formatted_link_type = gensub(/\)/, "_", "g", formatted_link_type);
+        gsub(/[ _]$/, "", formatted_link_type);
+
+        # Обработка для state_col2
+        metric_value = $2;
+        data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col2 "\"} " metric_value;
+        response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
+        if (response_value != 0) {
+            all_success = false;
         }
-        NR > 1 {
-            formatted_link_type = gensub(/ /, "_", "g", $1);
-            formatted_link_type = gensub(/\(/, "_", "g", formatted_link_type);
-            formatted_link_type = gensub(/\)/, "_", "g", formatted_link_type);
-            gsub(/[ _]$/, "", formatted_link_type);
 
-            # Обработка для state_col2
-            metric_value = $2;
-            data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col2 "\"} " metric_value;
-            response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
-            if (response_value != 0) {
-                all_success = false;
-            }
-
-            # Обработка для state_col3
-            metric_value = $3;
-            data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col3 "\"} " metric_value;
-            response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
-            if (response_value != 0) {
-                all_success = false;
-            }
-        }' "$file"
-        
-        # Записываем данные в лог
-        echo "Processed file: $file" >> "$log_file"
-        echo "header_label: $header_label, state_col2: $state_col2, state_col3: $raw_state_col3" >> "$log_file"
-done
-
-    # Обработка файлов с "CV" в имени
-    elif [[ "$file" == *CV* ]]; then
-        IFS=$'\t' read -r _ label2 label3 label4 label5 label6 label7 label8 label9 < "$file"
-
-        awk -F'\t' -v url="$url" -v label2_name="$label2" -v label3_name="$label3" -v label4_name="$label4" -v label5_name="$label5" -v label6_name="$label6" -v label7_name="$label7" '
-        NR > 1 {
-            col1 = $1
-            col2 = ($2 == "" ? "NULL" : "\"" $2 "\"")
-            col3 = ($3 == "" ? "NULL" : "\"" $3 "\"")
-            col4 = ($4 == "" ? "NULL" : "\"" $4 "\"")
-            col5 = ($5 == "" ? "NULL" : "\"" $5 "\"")
-            col6 = ($6 == "" ? "NULL" : "\"" $6 "\"")
-            col7 = ($7 == "" ? "NULL" : "\"" $7 "\"")
-            data_value = "CV{" label2_name "=" col2 ", " label3_name "=" col3 ", " label4_name "=" col4 ", " label5_name "=" col5 ", " label6_name "=" col6 ", " label7_name "=" col7 "} " col1
-            cmd = "curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \047" data_value "\047 " url
-            cmd | getline response_value
-            close(cmd)
-            if (response_value != "200" && response_value != "204") {
-                print "Ошибка при отправке данных из файла " FILENAME " (metric: CV). Код ответа: " response_value
-            }
+        # Обработка для state_col3
+        metric_value = $3;
+        data_value = "LV{LINK_TYPE=\"" formatted_link_type "\", state=\"" state_col3 "\"} " metric_value;
+        response_value = system("curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \"" data_value "\" \"" url "\"");
+        if (response_value != 0) {
+            all_success = false;
         }
-        ' "$file"
-    fi
+    }' "$file"
 
-    # Запись имени обработанного файла в log.txt, если данные успешно отправлены
-    if [[ $all_success == true ]]; then
-        echo "$file" >> log.txt
-    fi
+    # Записываем данные в лог
+    echo "Processed file: $file" >> "$log_file"
+    echo "header_label: $header_label, state_col2: $state_col2, state_col3: $raw_state_col3" >> "$log_file"
 
-    # Удаляем исходный файл
-    rm "$file"
-done
+# Обработка файлов с "CV" в имени
+elif [[ "$file" == *CV* ]]; then
+    IFS=$'\t' read -r _ label2 label3 label4 label5 label6 label7 label8 label9 < "$file"
+
+    awk -F'\t' -v url="$url" -v label2_name="$label2" -v label3_name="$label3" -v label4_name="$label4" -v label5_name="$label5" -v label6_name="$label6" -v label7_name="$label7" '
+    NR > 1 {
+        col1 = $1
+        col2 = ($2 == "" ? "NULL" : "\"" $2 "\"")
+        col3 = ($3 == "" ? "NULL" : "\"" $3 "\"")
+        col4 = ($4 == "" ? "NULL" : "\"" $4 "\"")
+        col5 = ($5 == "" ? "NULL" : "\"" $5 "\"")
+        col6 = ($6 == "" ? "NULL" : "\"" $6 "\"")
+        col7 = ($7 == "" ? "NULL" : "\"" $7 "\"")
+        data_value = "CV{" label2_name "=" col2 ", " label3_name "=" col3 ", " label4_name "=" col4 ", " label5_name "=" col5 ", " label6_name "=" col6 ", " label7_name "=" col7 "} " col1
+        cmd = "curl -s -w \"%{http_code}\" -o /dev/null -X POST -d \047" data_value "\047 " url
+        cmd | getline response_value
+        close(cmd)
+        if (response_value != "200" && response_value != "204") {
+            print "Ошибка при отправке данных из файла " FILENAME " (metric: CV). Код ответа: " response_value
+        }
+    }
+    ' "$file"
+fi
+
+# Запись имени обработанного файла в log.txt, если данные успешно отправлены
+if [[ $all_success == true ]]; then
+    echo "$file" >> log.txt
+fi
+
+# Удаляем исходный файл
+rm "$file"
