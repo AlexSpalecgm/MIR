@@ -120,10 +120,6 @@ for file in $files; do
         # Записываем данные в лог
         echo "Processed file: $file" >> "$log_file"
         echo "header_label: $header_label, state_col2: $state_col2, state_col3: $raw_state_col3" >> "$log_file"
-        
-        # Удаляем обработанный файл
-        rm "$file"
-    fi
 done
 
     # Обработка файлов с "CV" в имени
