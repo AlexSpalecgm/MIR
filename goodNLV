@@ -87,8 +87,13 @@ elif [[ "$file" == *LV* ]]; then
     IFS=$'\t' read -r header_label state_col2 raw_state_col3 < <(head -n 1 "$file" | tr -d '\r')
     state_col3="${raw_state_col3//$'\r'/}"
 
-    # Пропускаем первую строку и читаем остальные строки файла
+   # Пропускаем первую строку и читаем остальные строки файла
     tail -n +2 "$file" | while IFS=$'\t' read -r column1 column2 column3; do
+        # Проверяем, если строка пустая, то пропускаем её
+        if [[ -z "$column1" && -z "$column2" && -z "$column3" ]]; then
+            continue
+        fi
+
         # Убираем символы \r из каждой колонки данных
         column1="${column1//$'\r'/}"
         column2="${column2//$'\r'/}"
