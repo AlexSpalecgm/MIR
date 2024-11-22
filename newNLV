@@ -82,7 +82,7 @@ for file in $files; do
         done < <(tail -n +2 "$file")
 
     # Обработка файлов с "LV" в имени
-elif [[ "$file" == *LV* ]]; then
+    elif [[ "$file" == *LV* ]]; then
     # Считываем заголовок, убирая символы \r
     IFS=$'\t' read -r header_label state_col2 raw_state_col3 < <(head -n 1 "$file" | tr -d '\r')
     state_col3="${raw_state_col3//$'\r'/}"
