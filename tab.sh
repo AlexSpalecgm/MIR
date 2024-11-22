@@ -114,10 +114,18 @@ elif [[ "$file" == *LV* ]]; then
 
         # Подготовка данных для state_col3
         data_value="NLV{LINK_TYPE=\"${formatted_link_type}\", state=\"${state_col3}\"} ${column3}"
+        sent_data+=("$data_value")  # Добавляем строку в массив
+        echo "Отправляем на сервер: $data_value"  # Выводим строку в терминал
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
         if [[ "$response_value" != "200" ]]; then
             all_success=false
         fi
+    done
+
+    # Вывод всех отправленных данных
+    echo "Все отправленные данные:"
+    for line in "${sent_data[@]}"; do
+        echo "$line"
     done
 
     # Обработка файлов с "CV" в имени
