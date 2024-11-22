@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 # Указываем директорию для работы
-directory="/home/FC/davydovaa/test"
+directory="/home/psmon/vsp_files/"
 
 # Текущая дата и время в секундах с начала эпохи
 current_time_sec=$(date +%s)
