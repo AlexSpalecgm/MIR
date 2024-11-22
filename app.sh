@@ -130,6 +130,7 @@ elif [[ "$file" == *LV* ]]; then
 
     # Обработка файлов с "CV" в имени
 elif [[ "$file" == *CV* ]]; then
+    print "1"
     IFS=$'\t' read -r _ label2 label3 label4 label5 label6 label7 label8 label9 < "$file"
 
     awk -F'\t' -v url="$url" -v label2_name="$label2" -v label3_name="$label3" -v label4_name="$label4" -v label5_name="$label5" -v label6_name="$label6" -v label7_name="$label7" '
