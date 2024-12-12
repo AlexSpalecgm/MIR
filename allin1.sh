@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Указываем директорию для работы
-directory="/home/psmon/vsp_files/"
+directory="/home/exporter/1/"
 
 # Текущая дата и время в секундах с начала эпохи
 current_time_sec=$(date +%s)
@@ -84,16 +84,16 @@ for file in $files; do
         fi
 
         # Формируем данные для отправки на сервер
-        # Создаем строку для labels
+        # Создаем строку для labels, начиная со второго элемента
         label_pairs=()
-        for i in "${!labels[@]}"; do
+        for (( i=1; i<${#labels[@]}; i++ )); do
             label_pairs+=("${labels[i]}=\"${values[i]:-NULL}\"")  # Заполняем значениями или NULL
         done
         labels_string="${label_pairs[*]}"
         labels_string="${labels_string// /, }"  # Убираем пробелы между парами
 
-        # Формируем data_value
-        data_value="${metric_name}{${labels_string}} ${values[*]}"
+        # Изменяем data_value, передавая только первый столбец
+        data_value="${metric_name}{${labels_string}} ${values[0]}"
 
         # Отправляем данные на сервер и сохраняем ответ
         response_value=$(curl -s -w "%{http_code}" -o /dev/null -X POST -d "$data_value" "$url")
