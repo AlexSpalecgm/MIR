@@ -25,7 +25,7 @@ cd "$data_directory" || { echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: не уд�
 log_file="${log_directory}/log_${current_date}.txt"
 log_bad_file="${log_directory}/log_bad_${current_date}.txt"
 
-exec 2>>"$log_file"
+# exec 2>>"$log_file"
 
 if [ ! -f "$log_file" ]; then
     touch "$log_file"
