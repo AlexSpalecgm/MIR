@@ -147,7 +147,7 @@ for file in $files; do
         # Логируем отправленные данные
         metrics_count=$(echo "$metrics_data" | wc -l)  # Считаем количество строк метрик
         # Полный лог с данными виктории echo -e "[$log_time]\nINFO: Отправленные данные для файла '$file':\n$metrics_data\nКоличество отправленных метрик: $metrics_count" >> "$log_file"
-        echo -e "[$log_time]\nINFO: Количество отправленных метрик: $metrics_count" >> "$log_file"
+        echo -e "[$log_time] - INFO: Количество отправленных метрик: $metrics_count" >> "$log_file"
         # Удаляем файл после успешной обработки
         rm "$file"
     fi
