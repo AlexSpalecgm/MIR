@@ -25,7 +25,8 @@ cd "$data_directory" || { echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: не уд�
 log_file="${log_directory}/log_${current_date}.txt"
 log_bad_file="${log_directory}/log_bad_${current_date}.txt"
 
-exec 2>>"$log_file"
+#exec 2>>"$log_file"
+exec >>"$log_file" 2>&1
 
 if [ ! -f "$log_file" ]; then
     touch "$log_file"
@@ -157,4 +158,4 @@ end_time=$(date +%s%3N)  # Общее время окончания работы
 total_duration=$((end_time - start_time))  # Общее время выполнения скрипта
 
 # Запись в лог с информацией о выполнении
-echo -e "$(date +"%Y-%m-%d %H:%M:%S") - INFO: Общее время выполнения скрипта: $total_duration мс\n-----------------------" >> "$log_file"
+echo -e "[$(date +"%Y-%m-%d %H:%M:%S")] - INFO: Общее время выполнения скрипта: $total_duration мс\n-----------------------" >> "$log_file"
