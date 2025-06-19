@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+exec >"log_file" 2>&1
 # Указываем директории для работы
 data_directory="/mnt/way4/BCB/BW-SPOOL/SCHEDULER-INC/Grafana/prod"
 log_directory="/home/psmon/scheduler/bin/log"
