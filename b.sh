@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+# Указываем директории для работы
+data_directory="/home/psmon/bin/data"
+log_directory="/home/psmon/bin/log"
+#archive_directory="/home/psmon/bin/log/archive/"  # Новая директория для архивов
+
+# Текущая дата и время в секундах с начала эпохи
+current_time_sec=$(date +%s)
+
+# Получаем текущую дату в формате ГГГГММДД
+current_date=$(date +%Y%m%d)
+
+# Указываем URL для отправки данных
+url="http://localhost:8428/api/v1/import/prometheus"
+
+# Получаем текущий день и месяц
+day_of_month=$(date +%d)
+month_year=$(date +%Y-%m)
+
+# Переходим в указанную директорию
+cd "$data_directory" || { echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: не удалось перейти в директорию $data_directory"; exit 1; }
+
+# Проверяем, существуют ли лог-файлы, если нет - создаем
+log_file="${log_directory}/process_files_${current_date}.txt"
+
+#exec 2>>"$log_file"
+exec >>"$log_file" 2>&1
+
+if [ ! -f "$log_file" ]; then
+    touch "$log_file"
+fi
+
+# Проверяем, существует ли директория для архивов, если нет - создаем
+#if [ ! -d "$archive_directory" ]; then
+#    mkdir -p "$archive_directory"
+#fi
+
+# Формируем маску для поиска файлов
+mask="2[4-6][0-1][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*.txt"
+
+# Находим файлы по маске
+files=$(ls $mask 2>/dev/null)
+
+# Проверяем, найдены ли файлы
+#if [ -z "$files" ]; then
+   # echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: Файлы не найдены!"
+#    exit 1
+#fi
+
+start_time=$(date +%s%3N)  # Общее время начала работы скрипта в миллисекундах
+
+# Перебираем найденные файлы и проверяем их срок годности
+for file in $files; do
+    # Извлекаем часть имени файла после '_'
+    file_suffix="${file#*_}"  # Получаем часть после первого '_'
+
+    # Извлекаем дату и время из имени файла
+    file_date="${file:0:6}"  # ГГММДД
+    file_time="${file:6:4}"  # ЧЧММ
+
+    # Проверяем валидность времени (часы < 24 и минуты < 60)
+    hour="${file_time:0:2}"
+    minute="${file_time:2:2}"
+
+    if (( 10#$hour >= 24 || 10#$minute >= 60 )); then
+        echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: некорректный формат времени $file" >> "$log_file"
+        rm "$file"
+        continue
+    fi
+
+    # Преобразуем дату и время в секунды с начала эпохи
+    year="20${file_date:0:2}"
+    month="${file_date:2:2}"
+    day="${file_date:4:2}"
+    file_time_sec=$(date -d "${year}-${month}-${day} ${hour}:${minute}" +%s 2>/dev/null)
+
+    if [[ $? -ne 0 ]]; then
+        echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: невозможно преобразовать дату и время из имени $file" >> "$log_file"
+        rm "$file"
+        continue
+    fi
+
+    # Сравниваем разницу времени, чтобы знать, не старше ли файл 5 минут
+    if (( current_time_sec - file_time_sec > 301 )); then
+        echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR: файл устарел более чем на 5 минут $file" >> "$log_file"
+        rm "$file"
+        continue
+    fi
+
+    # Чтение метрики из имени файла
+    metric_name="${file#*_}"  # Убираем часть до первого '_'
+    metric_name="${metric_name%.txt}"  # Убираем .txt
+
+    # Удаляем символы перевода каретки и обрабатываем файл с AWK для формирования строки для VictoriaMetrics
+    metrics_data=$(tr -d '\r' < "$file" | awk -v metric_name="$metric_name" -F'\t' '
+        NR==1 {
+            # Чтение заголовка с labels
+            for (i=2; i<=NF; i++) labels[i-1]=$i; 
+            next
+        }
+        {
+            # Формируем значения для каждого ряда
+            value = $1;  # Значение метрики из первого столбца
+            values = "";
+            for (i=2; i<=NF; i++) {
+                if (values != "") values = values ",";
+                values = values labels[i-1] "=\"" $i "\"";  # Значения label в кавычках
+            }
+	    values = values ",service_id=\"7789\",team=\"PROCESSING\"";
+            print metric_name "{" values "} " value;  # Добавляем значение метрики
+        }
+    ')
+
+    # Получаем текущее время для записи в лог
+    log_time=$(date +"%Y-%m-%d %H:%M:%S")
+
+    # Отправка данных в VictoriaMetrics
+    if [[ -n "$metrics_data" ]]; then
+    	curl -s -o /dev/null -X POST --data "$metrics_data" "$url"
+        
+        # Логируем отправленные данные
+        metrics_count=$(echo "$metrics_data" | wc -l)  # Считаем количество строк метрик
+        # Полный лог с данными виктории echo -e "$log_time\nINFO: Отправленные данные для файла '$file':\n$metrics_data\nКоличество отправленных метрик: $metrics_count" >> "$log_file"
+        echo -e "$log_time - INFO: Файл '$file'. Количество отправленных метрик: $metrics_count" >> "$log_file"
+        # Удаляем файл после успешной обработки
+        rm "$file"
+    fi
+done
+
+end_time=$(date +%s%3N)  # Общее время окончания работы скрипта в миллисекундах
+total_duration=$((end_time - start_time))  # Общее время выполнения скрипта
+
+# Запись в лог с информацией о выполнении
+echo -e "$(date +"%Y-%m-%d %H:%M:%S") - INFO: Общее время выполнения скрипта: $total_duration мс\n-----------------------" >> "$log_file"
