@@ -1,0 +1,29 @@
+#!/bin/bash
+
+metrics_file="1.txt"
+vm_url="http://localhost:8428"
+log_file="job.log"
+
+# Перенаправляем весь вывод в лог
+exec > >(tee -a "$log_file") 2>&1
+
+while read metric; do
+    # Получаем все метки для этой метрики
+    labels=$(curl -s "$vm_url/api/v1/labels" | jq -r '.data[]')
+    # Ищем значение метки 'job' для этой метрики
+    # Для этого получим все метки и их значения
+    # Но API VictoriaMetrics не возвращает напрямую значения меток по имени метрики,
+    # поэтому лучше получить все метки для конкретной метрики.
+    # Можно сделать запрос к /api/v1/series?match[]=<метрика> и извлечь 'job' из результатов.
+
+    # Получаем серии по метрике
+    series_json=$(curl -s "$vm_url/api/v1/series?match[]=$metric")
+    # Извлекаем значение 'job' из серии (если есть)
+    job_value=$(echo "$series_json" | jq -r '.data[] | select(.job) | .job' | head -n 1)
+
+    if [ -z "$job_value" ]; then
+        job_value="не определено"
+    fi
+
+    echo "$metric:$job_value"
+done < "$metrics_file"
