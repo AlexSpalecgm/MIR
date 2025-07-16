@@ -6,16 +6,22 @@ METRICS_FILE="1.txt"
 # URL вашего VictoriaMetrics сервера
 VICTORIAMETRICS_URL="http://localhost:8428"
 
+# Лог-файл для записи результатов
+LOG_FILE="metrics_labels.log"
+
+# Очистка лог-файла перед запуском
+> "$LOG_FILE"
+
 # Читаем каждую строку из файла
 while IFS= read -r metric; do
-    echo "Метрика: $metric"
+    echo "Обработка метрики: $metric" | tee -a "$LOG_FILE"
     
     # Получаем все серии для данной метрики
     response=$(curl -s "${VICTORIAMETRICS_URL}/api/v1/series?match[]=${metric}")
     
     # Проверяем успешность запроса
     if [ "$(echo "$response" | jq -r '.status')" != "success" ]; then
-        echo "Ошибка при получении данных для $metric"
+        echo "Ошибка при получении данных для $metric" | tee -a "$LOG_FILE"
         continue
     fi
     
@@ -25,7 +31,13 @@ while IFS= read -r metric; do
     # Получаем уникальные метки
     unique_labels=$(echo "$labels" | sort | uniq)
     
-    echo "Уникальные метки:"
-    echo "$unique_labels"
-    echo ""
+    # Группируем по метрике и выводим в лог файл
+    {
+        echo "Метрика: $metric"
+        echo "Уникальные метки:"
+        echo "$unique_labels"
+        echo ""
+    } >> "$LOG_FILE"
 done < "$METRICS_FILE"
+
+echo "Группировка завершена. Результат в файле $LOG_FILE."
