@@ -1,43 +1,20 @@
 #!/bin/bash
 
-# Путь к файлу со списком метрик
-METRICS_FILE="metrics_list.txt"
+# Ваш список метрик
+metrics_file="1.txt"
+# Адрес вашего VictoriaMetrics
+vm_url="http://localhost:8428"
 
-# URL вашего VictoriaMetrics сервера
-VICTORIAMETRICS_URL="http://localhost:8428"
-
-# Лог-файл для записи результатов
-LOG_FILE="metrics_labels.log"
-
-# Очистка лог-файла перед запуском
-> "$LOG_FILE"
-
-# Читаем каждую строку из файла
-while IFS= read -r metric; do
-    echo "Обработка метрики: $metric" | tee -a "$LOG_FILE"
-    
-    # Получаем все серии для данной метрики
-    response=$(curl -s "${VICTORIAMETRICS_URL}/api/v1/series?match[]=${metric}")
-    
-    # Проверяем успешность запроса
-    if [ "$(echo "$response" | jq -r '.status')" != "success" ]; then
-        echo "Ошибка при получении данных для $metric" | tee -a "$LOG_FILE"
-        continue
-    fi
-    
-    # Извлекаем все метки из серий, исключая __name__
-    labels=$(echo "$response" | jq -r '.data[] | to_entries[] | select(.key != "__name__") | "$.key)=$.value)"')
-    
-    # Получаем уникальные метки
-    unique_labels=$(echo "$labels" | sort | uniq)
-    
-    # Группируем по метрике и выводим в лог файл
-    {
-        echo "Метрика: $metric"
-        echo "Уникальные метки:"
-        echo "$unique_labels"
-        echo ""
-    } >> "$LOG_FILE"
-done < "$METRICS_FILE"
-
-echo "Группировка завершена. Результат в файле $LOG_FILE."
+while read metric; do
+    echo "Метрика: $metric"
+    # Получаем все метки для этой метрики
+    labels=$(curl -s "$vm_url/api/v1/labels" | jq -r '.data[]')
+    echo "Метки:"
+    for label in $labels; do
+        echo "  $label"
+        # Получаем все значения для этой метки
+        values=$(curl -s "$vm_url/api/v1/label/$label/values")
+        echo "    Значения:"
+        echo "$values" | jq -r '.data[]'
+    done
+done < "$metrics_file"
