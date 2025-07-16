@@ -13,19 +13,21 @@ log() {
 
 log "Запуск скрипта: $(date)"
 
-# Получаем список всех метрик
+# Получаем все уникальные имена метрик
 metrics=$(curl -s "$VICTORIAMETRICS_URL/api/v1/label/__name__/values" | jq -r '.data[]' | sort -u)
 
-declare -A jobs_set
-declare -A metrics_set
+declare -A jobs_set      # Массив для хранения уникальных джобов
+declare -A metrics_set   # Массив для хранения уникальных пар (джоб+метрика)
 
+# Обработка каждой метрики
 for metric in $metrics; do
     log "Обработка метрики: $metric"
 
     # Получаем все серии для этой метрики
     series_json=$(curl -s "$VICTORIAMETRICS_URL/api/v1/series?match[]=$metric")
-    # Обрабатываем каждую серию
-    echo "$series_json" | jq -c '.data[]' | while read -r serie; do
+    
+    # Обрабатываем каждую серию без подпроцесса
+    echo "$series_json" | jq -c '.data[]' | while IFS= read -r serie; do
         job=$(echo "$serie" | jq -r '.job // empty')
         if [ -n "$job" ]; then
             jobs_set["$job"]=1
@@ -34,17 +36,28 @@ for metric in $metrics; do
 
             # Собираем метки для этой серии
             labels=$(echo "$serie" | jq -r 'to_entries|map("$.key)=$.value)")|.[]')
+            declare -A label_values=()
             for label in $labels; do
-                key_label=$(echo "$label" | cut -d= -f1)
-                value_label=$(echo "$label" | cut -d= -f2)
-                # Можно сохранять метки в файлы или массивы, но для простоты — пропустим.
-                # В дальнейшем можно собрать все уникальные значения по ключам.
+                key_lbl=$(echo "$label" | cut -d= -f1)
+                value_lbl=$(echo "$label" | cut -d= -f2)
+                if [ "$key_lbl" != "job" ]; then
+                    label_values["$key_lbl=$value_lbl"]=1
+                fi
             done
+
+            # Выводим метки для этой серии (можно сохранить или обработать дальше)
+            for lbl in "${!label_values[@]}"; do
+                echo "      $lbl"
+            done
+
         fi
     done
+
 done
 
-# Теперь выводим результаты по джобам и метрикам
+log "Обработка завершена. Итоги:"
+
+# Теперь выводим по джобам и метрикам с их метками
 
 for job in "${!jobs_set[@]}"; do
     log "Джоб: $job"
@@ -52,25 +65,30 @@ for job in "${!jobs_set[@]}"; do
         IFS='|' read j m <<< "$key"
         if [ "$j" = "$job" ]; then
             log "  Метрика: $m"
-            log "    Метки:"
-            declare -A label_values=()
-            # Собираем метки для этого джоба и метрики повторно
+            
+            # Собираем метки для этого джоба и этой метрики
+            declare -A label_values_global=()
+            
+            # Получаем серии для данной метрики еще раз (можно оптимизировать, сохраняя данные заранее)
             series_json=$(curl -s "$VICTORIAMETRICS_URL/api/v1/series?match[]=$m")
-            echo "$series_json" | jq -c '.data[]' | while read -r serie; do
+            
+            # Обрабатываем серии для этого джоба и метрики
+            echo "$series_json" | jq -c '.data[]' | while IFS= read -r serie; do
                 job_in_serie=$(echo "$serie" | jq -r '.job // empty')
-                if [ "$job_in_serie" = "$job" ]; then
+                if [ "$job_in_serie" = "$j" ]; then
                     labels=$(echo "$serie" | jq -r 'to_entries|map("$.key)=$.value)")|.[]')
                     for label in $labels; do
                         key_lbl=$(echo "$label" | cut -d= -f1)
                         value_lbl=$(echo "$label" | cut -d= -f2)
                         if [ "$key_lbl" != "job" ]; then
-                            label_values["$key_lbl=$value_lbl"]=1
+                            label_values_global["$key_lbl=$value_lbl"]=1
                         fi
                     done
                 fi
             done
 
-            for lbl in "${!label_values[@]}"; do
+            # Выводим все уникальные метки для этого джоба и метрики
+            for lbl in "${!label_values_global[@]}"; do
                 echo "      $lbl"
             done
 
@@ -78,4 +96,4 @@ for job in "${!jobs_set[@]}"; do
     done
 done
 
-log "Завершение скрипта: $(date)"
+log "Скрипт завершен: $(date)"
