@@ -73,3 +73,9 @@ for job in "${!jobs_set[@]}"; do
             for lbl in "${!label_values[@]}"; do
                 echo "      $lbl"
             done
+
+        fi
+    done
+done
+
+log "Завершение скрипта: $(date)"
