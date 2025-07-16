@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Путь к файлу со списком метрик
-METRICS_FILE="1.txt"
+METRICS_FILE="metrics_list.txt"
 
 # URL вашего VictoriaMetrics сервера
 VICTORIAMETRICS_URL="http://localhost:8428"
