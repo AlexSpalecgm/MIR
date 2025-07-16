@@ -1,19 +1,25 @@
 #!/bin/bash
 
-# Адрес VictoriaMetrics
-VM_URL="http://<ваш_сервер>:8428"
-# Файл со списком метрик
-METRICS_FILE="metrics.txt"
+# Ваш список метрик
+metrics_file="1.txt"
+# Адрес вашего VictoriaMetrics
+vm_url="http://localhost:8428"
+# Лог-файл
+log_file="script.log"
 
-while read -r metric; do
+# Перенаправляем весь вывод скрипта в лог-файл
+exec > >(tee -a "$log_file") 2>&1
+
+while read metric; do
     echo "Метрика: $metric"
-    # Получаем список всех меток для этой конкретной метрики
-    labels_json=$(curl -s "$VM_URL/api/v1/labels" --data-urlencode "match[]={$metric}")
-    # Извлекаем имена меток из JSON
-    labels=$(echo "$labels_json" | jq -r '.data[]')
-    echo "Уникальные метки:"
+    # Получаем все метки для этой метрики
+    labels=$(curl -s "$vm_url/api/v1/labels" | jq -r '.data[]')
+    echo "Метки:"
     for label in $labels; do
         echo "  $label"
+        # Получаем все значения для этой метки
+        values=$(curl -s "$vm_url/api/v1/label/$label/values")
+        echo "    Значения:"
+        echo "$values" | jq -r '.data[]'
     done
-    echo ""
-done < "$METRICS_FILE"
+done < "$metrics_file"
