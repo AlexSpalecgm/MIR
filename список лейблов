@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Укажите ваш URL VictoriaMetrics
+VICTORIAMETRICS_URL="http://<ваш_сервер>"
+
+# Укажите путь к лог-файлу
+LOG_FILE="metrics_log_$(date +%Y%m%d_%H%M%S).log"
+
+# Функция для логирования
+log() {
+    echo "$1" | tee -a "$LOG_FILE"
+}
+
+log "Запуск скрипта: $(date)"
+
+declare -A jobs_map  # ассоциативный массив для хранения уникальных джобов и их метрик
+declare -A metrics_map  # для хранения уникальных метрик по джобам
+
+# Получить список всех метрик (имена)
+metrics=$(curl -s "$VICTORIAMETRICS_URL/api/v1/label/__name__/values" | jq -r '.data[]' | sort -u)
+
+for metric in $metrics; do
+    log "Обработка метрики: $metric"
+
+    # Получить все серии для этой метрики
+    series=$(curl -s "$VICTORIAMETRICS_URL/api/v1/series?match[]=$metric")
+    
+    # Обойти все серии
+    echo "$series" | jq -c '.data[]' | while read -r serie; do
+        # Извлечь джоб (если есть)
+        job=$(echo "$serie" | jq -r '.job // empty')
+        # Собрать все метки в виде key=value
+        labels=$(echo "$serie" | jq -r 'to_entries|map("$.key)=$.value)")|.[]')
+
+        if [ -n "$job" ]; then
+            # Обеспечить уникальность по джобу и метрике
+            if [ -z "${jobs_map[$job]}" ]; then
+                declare -A metrics_in_job=()
+                jobs_map[$job]=""
+            fi
+
+            if [ -z "${metrics_map[$job][$metric]}" ]; then
+                metrics_map[$job][$metric]=1
+            fi
+
+            # Для каждой метки — добавить только уникальные значения внутри этой метки для этого джоба и метрики
+            for label in $labels; do
+                key=$(echo "$label" | cut -d= -f1)
+                value=$(echo "$label" | cut -d= -f2)
+                eval "declare -A label_values_${job}_${metric}_${key}"
+                eval "label_values_${job}_${metric}_${key}[\$value]=1"
+            done
+        fi
+    done
+
+done
+
+# Выводим итоговые данные в лог-файл:
+for job in "${!jobs_map[@]}"; do
+    log "Джоб: $job"
+    for metric in "${!metrics_map[$job]}"; do
+        log "  Метрика: $metric"
+        log "    Метки:"
+        # Собираем все уникальные значения меток для этого джоба и метрики
+        declare -A all_labels=()
+        for serie in $(echo "$series" | jq -c '.data[]'); do
+            job_in_serie=$(echo "$serie" | jq -r '.job // empty')
+            if [ "$job_in_serie" = "$job" ]; then
+                key_value_pairs=$(echo "$serie" | jq -r 'to_entries|map("$.key)=$.value)")|.[]')
+                for kv in $key_value_pairs; do
+                    key=$(echo "$kv" | cut -d= -f1)
+                    value=$(echo "$kv" | cut -d= -f2)
+                    if [ "$key" != "job" ]; then  # исключая сам ключ job, если нужно оставить — уберите условие
+                        all_labels["$key=$value"]=1
+                    fi
+                done
+            fi
+        done
+
+        for label in "${!all_labels[@]}"; do
+            echo "      $label"
+        done
+
+    done
+done
+
+log "Завершение скрипта: $(date)"
