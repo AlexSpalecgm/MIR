@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Путь к файлу со списком метрик
+METRICS_FILE="1.txt"
+
+# URL вашего VictoriaMetrics сервера
+VICTORIAMETRICS_URL="http://localhost:8428"
+
+# Читаем каждую строку из файла
+while IFS= read -r metric; do
+    echo "Метрика: $metric"
+    
+    # Получаем все серии для данной метрики
+    response=$(curl -s "${VICTORIAMETRICS_URL}/api/v1/series?match[]=${metric}")
+    
+    # Проверяем успешность запроса
+    if [ "$(echo "$response" | jq -r '.status')" != "success" ]; then
+        echo "Ошибка при получении данных для $metric"
+        continue
+    fi
+    
+    # Извлекаем все метки из серий, исключая __name__
+    labels=$(echo "$response" | jq -r '.data[] | to_entries[] | select(.key != "__name__") | "$.key)=$.value)"')
+    
+    # Получаем уникальные метки
+    unique_labels=$(echo "$labels" | sort | uniq)
+    
+    echo "Уникальные метки:"
+    echo "$unique_labels"
+    echo ""
+done < "$METRICS_FILE"
