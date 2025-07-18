@@ -1,0 +1,28 @@
+# В месте формирования переменной metrics_data, внутри awk, добавьте условие для определения service_id
+metrics_data=$(tr -d '\r' < "$file" | awk -v metric_name="$metric_name" -F'\t' '
+    NR==1 {
+        # Чтение заголовка с labels
+        for (i=2; i<=NF; i++) labels[i-1]=$i; 
+        next
+    }
+    {
+        # Формируем значения для каждого ряда
+        value = $1;  # Значение метрики из первого столбца
+        values = "";
+        for (i=2; i<=NF; i++) {
+            if (values != "") values = values ",";
+            values = values labels[i-1] "=\"" $i "\"";  # Значения label в кавычках
+        }
+        # Определяем service_id в зависимости от имени метрики
+        if (metric_name == "atm_status") {
+            service_id_value = "7789";
+        } else {
+            service_id_value = "0000";
+        }
+        # Добавляем service_id и team в конец лейблов
+        if (values != "") values = values ",";
+        values = values "service_id=\"" service_id_value "\",team=\"PROCESSING\"";
+
+        print metric_name "{" values "} " value;
+    }
+')
